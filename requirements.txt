@@ -3,5 +3,4 @@ seaborn
 matplotlib
 
 chess
-jax[cpu]
-
+dm-haiku
