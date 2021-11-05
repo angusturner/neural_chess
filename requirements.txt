@@ -1,0 +1,7 @@
+# plotting
+seaborn
+matplotlib
+
+chess
+jax[cpu]
+
