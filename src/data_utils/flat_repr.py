@@ -7,7 +7,7 @@ from .piece_mappings import PIECE_TO_INT, INT_TO_PIECE
 
 def board_to_flat_repr(board: Board) -> Tuple[np.ndarray, bool]:
     """
-    Take a `Board` class and represent it as a flattened integer array, indicating
+    Take a `Board` object and represent it as a flattened integer array, indicating
     the piece value of each square. Additionally return a boolean indicating if
     white is moving next.
     Note: row 0 of the board is rank 8, and col 0 is file a
@@ -30,6 +30,12 @@ def board_to_flat_repr(board: Board) -> Tuple[np.ndarray, bool]:
 
 
 def flat_repr_to_board(flat_repr: np.ndarray, white_to_move: bool) -> Board:
+    """
+    Take a flattened integer representation of a board and return a `Board` object
+    :param flat_repr:
+    :param white_to_move:
+    :return:
+    """
     board = Board()
     board.turn = white_to_move
     rank_no = 7
