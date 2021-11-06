@@ -65,3 +65,13 @@ if __name__ == "__main__":
     # grab all pgn files
     pgn_files = glob.glob(os.path.join(DATA_DIR, "*.pgn"))
     print(pgn_files)
+
+    # create a multi-processing pool, with an input and output queue
+    # - One worker process will read pgn files, and add Games to the input queue
+    # - N workers will pull from the input queue, process the games, and add the processed games to the output queue
+    # - One worker will take items from the output queue and write them to the disk
+    manager = mp.Manager()
+    input_queue = manager.Queue()
+    output_queue = manager.Queue()
+
+    raise NotImplementedError("This is not implemented yet.")
