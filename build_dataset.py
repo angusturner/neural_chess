@@ -44,6 +44,7 @@ def process_pgn_file(pgn_file, break_early: Optional[int] = None) -> List[Game]:
                 logging.info(f"Reached end of file {pgn_file}")
                 break
             games.append(game)
+            i += 1
 
     return games
 
