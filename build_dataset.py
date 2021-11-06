@@ -36,7 +36,7 @@ def process_pgn_file(pgn_file, break_early: Optional[int] = None) -> List[Game]:
                 logging.info(f"Breaking early after {i} games.")
                 break
             try:
-                game = chess.pgn.read_game(f)
+                game = chess.pgn.read_game(f, Visitor=CustomGameBuilder)
             except IOError as _e:
                 logging.error(f"Error parsing game in {pgn_file}. Skipping.")
 
