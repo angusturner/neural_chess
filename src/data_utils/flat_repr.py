@@ -6,7 +6,7 @@ from .piece_mappings import PIECE_TO_INT, INT_TO_PIECE
 
 def board_to_flat_repr(board: Board) -> np.ndarray:
     """
-    Convert a `Board` object  to a flattened integer array, as follows:
+    Convert a `chess.Board` object  to a flattened integer array, as follows:
     1. Represent the board as (8, 8) (rank, file) array
     2. The value of each square takes an integer in [0, 12] (see `PIECE_TO_INT`)
     3. The board is flattened (8, 8) -> (64)
@@ -14,6 +14,7 @@ def board_to_flat_repr(board: Board) -> np.ndarray:
     - Castling rights
     - En passant square
     - Who's turn it is
+    - The move count
     :param board:
     :return:
     """
@@ -30,7 +31,7 @@ def board_to_flat_repr(board: Board) -> np.ndarray:
 
 def flat_repr_to_board(flat_repr: np.ndarray, white_to_move: bool) -> Board:
     """
-    Take a flattened integer representation of a board and return a `Board` object
+    Take a flattened integer representation of a board and return a `chess.Board` object
     :param flat_repr:
     :param white_to_move:
     :return:
