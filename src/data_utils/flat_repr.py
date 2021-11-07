@@ -1,32 +1,31 @@
 import numpy as np
 import chess
 from chess import Board, Piece
-from typing import Tuple
 from .piece_mappings import PIECE_TO_INT, INT_TO_PIECE
 
 
-def board_to_flat_repr(board: Board) -> Tuple[np.ndarray, bool]:
+def board_to_flat_repr(board: Board) -> np.ndarray:
     """
-    Take a `Board` object and represent it as a flattened integer array, indicating
-    the piece value of each square. Additionally return a boolean indicating if
-    white is moving next.
-    Note: row 0 of the board is rank 8, and col 0 is file a
-    TODO: Consider the following additional pieces of info, which also determine the state
-        - is en-passant available on the next turn?
-        - is castling still permitted?
-        - what is the move count?
+    Convert a `Board` object  to a flattened integer array, as follows:
+    1. Represent the board as (8, 8) (rank, file) array
+    2. The value of each square takes an integer in [0, 12] (see `PIECE_TO_INT`)
+    3. The board is flattened (8, 8) -> (64)
+    Note: this representation does not account for the following additional bits of state:
+    - Castling rights
+    - En passant square
+    - Who's turn it is
     :param board:
     :return:
     """
     str_repr = f"{board}"
     out = []
-    for line in str_repr.split("\n"):
+    for line in str_repr.split("\n")[::-1]:
         pieces = line.strip().split(" ")
         for piece in pieces:
             int_repr = PIECE_TO_INT[piece]
             out.append(int_repr)
 
-    return np.array(out), board.turn
+    return np.array(out)
 
 
 def flat_repr_to_board(flat_repr: np.ndarray, white_to_move: bool) -> Board:
@@ -38,14 +37,10 @@ def flat_repr_to_board(flat_repr: np.ndarray, white_to_move: bool) -> Board:
     """
     board = Board()
     board.turn = white_to_move
-    rank_no = 7
-    for rank in flat_repr.reshape(8, 8):
-        file_no = 0
-        for piece in rank:
+    for rank_no, rank in enumerate(flat_repr.reshape(8, 8)):
+        for file_no, piece in enumerate(rank):
             symbol = INT_TO_PIECE[piece]
             piece = None if symbol == "." else Piece.from_symbol(symbol)
             square = chess.square(file_index=file_no, rank_index=rank_no)
             board.set_piece_at(square, piece)
-            file_no += 1
-        rank_no -= 1
     return board
