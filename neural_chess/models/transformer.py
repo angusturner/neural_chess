@@ -1,7 +1,6 @@
 from typing import Optional
 
 import jax
-import numpy as np
 import jax.numpy as jnp
 import haiku as hk
 
@@ -36,7 +35,7 @@ def layer_norm(name: Optional[str] = None) -> hk.LayerNorm:
 
 
 class SetTransformer(hk.Module):
-    def __init__(self, nb_layers, nb_heads, hidden_dim, head_dim, output_dim, dropout=0.1):
+    def __init__(self, nb_layers, nb_heads, hidden_dim, head_dim, output_dim, dropout=0.1, **_kwargs):
         """
         Simple feed-forward transformer stack, with no masking or causality.
         Global pooling to a single output.
@@ -61,7 +60,8 @@ class SetTransformer(hk.Module):
         :param init_scale:
         :return:
         """
-        mha = hk.MultiHeadAttention(num_heads=self.nb_heads, key_size=self.hidden_dim, w_init_scale=init_scale)
+        key_size = self.hidden_dim // self.nb_heads
+        mha = hk.MultiHeadAttention(num_heads=self.nb_heads, key_size=key_size, w_init_scale=init_scale)
         mlp = MLP(hidden_dim=self.hidden_dim * 2, output_dim=self.hidden_dim, init_scale=init_scale)
         ln1 = layer_norm()
         ln2 = layer_norm()
@@ -87,10 +87,10 @@ class SetTransformer(hk.Module):
             h_dense = hk.dropout(hk.next_rng_key(), dropout, h_dense)
             h = h + h_dense
 
-        h = layer_norm(h)
+        h = layer_norm()(h)
 
         # average over length dimension
         h = jnp.mean(h, axis=-2)
 
         # project to final output
-        return hk.Linear(self.output_dim, w_init=hk.initializers.VarianceScaling(init_scale))(h)
+        return MLP(hidden_dim=self.hidden_dim * 2, output_dim=self.output_dim, init_scale=init_scale)(h)
