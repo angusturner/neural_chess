@@ -25,3 +25,4 @@ black
 seaborn~=0.11.2
 matplotlib~=3.4.3
 jax~=0.2.24
+hijax~=0.1.0
