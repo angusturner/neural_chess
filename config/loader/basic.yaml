@@ -1,0 +1,7 @@
+both:
+  shuffle: true
+  batch_size: 32
+train:
+  drop_last: true
+test:
+  drop_last: false

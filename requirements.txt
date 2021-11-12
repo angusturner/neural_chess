@@ -1,9 +1,27 @@
-black
+##
+# All hijax projects should have this stuff
+#
 numpy~=1.21.4
+hydra-core~=1.1.1
+omegaconf~=2.1.1
+torch~=1.10.0
 tqdm~=4.62.3
-chess~=1.7.0
+
+# jax stuff
+# note: install jax manually first, as it depends on your system
 dm-haiku~=0.0.5
+optax~=0.0.9
+
+##
+# This stuff is all application-specific / extra
+#
+
+chess~=1.7.0
+
+# linting
+black
 
 # plotting
 seaborn~=0.11.2
 matplotlib~=3.4.3
+jax~=0.2.24

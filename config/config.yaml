@@ -1,0 +1,10 @@
+nb_epoch: 1000
+overwrite: false
+name: ???
+wandb:
+    project: neural_chess
+defaults:
+  - loader: basic
+  - model: policy_net
+  - dataset: chess
+  - worker: supervised_worker

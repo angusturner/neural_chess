@@ -1,0 +1,7 @@
+class: SupervisedWorker
+log_interval: 50
+epoch_save_freq: 10
+optim_class: Adam
+optim_settings:
+  lr: 2e-4
+  weight_decay: 1e-6
