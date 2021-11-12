@@ -93,5 +93,4 @@ class SetTransformer(hk.Module):
         h = jnp.mean(h, axis=-2)
 
         # project to final output
-
-        return h
+        return hk.Linear(self.output_dim, w_init=hk.initializers.VarianceScaling(init_scale))(h)
