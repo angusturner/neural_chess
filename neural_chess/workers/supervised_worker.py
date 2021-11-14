@@ -27,10 +27,14 @@ class SupervisedWorker(AbstractWorker):
         super().__init__(*args, **kwargs)
 
         # transform the model into a pure jax function
-        self.forward = hk.transform(model)
+        self.forward: Transformed = hk.transform(model)
         self.rng = jax.random.PRNGKey(42)
+
+        # TODO: register parameter state for checkpointing
         self.params = None
 
+    # TODO: consider initialising the model inside the `setup_worker` method?
+    # i.e) since we need access to the loader...
     def _initialise_parameters(self, loader):
         if self.params is not None:
             return
@@ -42,6 +46,7 @@ class SupervisedWorker(AbstractWorker):
         # initialise the network
         self._initialise_parameters(loader)
 
+        # NOTE: jax seems to support closures just fine - as long as no args or return values are functions?
         @jax.jit
         def compute_loss(params, rng, batch, is_training=True):
             output = self.forward.apply(params, rng, is_training=is_training, **batch)
