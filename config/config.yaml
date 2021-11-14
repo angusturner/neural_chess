@@ -6,5 +6,5 @@ wandb:
 defaults:
   - loader: basic
   - model: policy_net
-  - dataset: chess
+  - dataset: lichess
   - worker: supervised_worker

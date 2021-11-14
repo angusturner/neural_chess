@@ -17,6 +17,7 @@ def train(cfg: DictConfig) -> None:
     reset_metrics = cfg.get("reset_metrics", False)
     worker, cfg = setup_worker(
         name=name,
+        cfg=cfg,
         overwrite=overwrite,
         reset_metrics=reset_metrics,
         module=MODULE_NAME,

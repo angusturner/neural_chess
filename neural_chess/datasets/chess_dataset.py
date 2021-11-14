@@ -4,27 +4,38 @@ import pyarrow as pa
 from chess import Board, Move
 from torch.utils.data import Dataset
 
-from neural_chess.data_utils import board_to_flat_repr
+from neural_chess.data_utils import board_to_flat_repr, get_legal_move_mask
 from neural_chess.data_utils.one_hot import move_to_one_hot
 from neural_chess.data_utils.simple_game import SimpleGame
 
 
 class ChessDataset(Dataset):
-    def __init__(self, path_to_db: str):
+    def __init__(self, path_to_db: str, is_training: bool = True):
         super().__init__()
 
         # load memory-mapped dataset
         with pa.memory_map(path_to_db, "r") as source:
             self.data: pa.lib.Table = pa.ipc.open_file(source).read_all()
 
+        # 80/20 train/val split
+        np.random.seed(42)
+        mask = np.random.random(self.data.num_rows) < 0.8
+        if is_training:
+            (self.indices,) = np.where(mask)
+
+        else:
+            (self.indices,) = np.where(~mask)
+        print(f"Loaded {len(self.indices)} items for {'train' if is_training else 'test'}")
+
     def __len__(self):
-        return self.data.num_rows
+        return len(self.indices)
 
     def __getitem__(self, idx):
         """
         :param idx:
         :return:
         """
+        idx = self.indices[idx]
 
         # get the game
         keys = ("moves", "white_elo", "black_elo", "result")
@@ -44,15 +55,21 @@ class ChessDataset(Dataset):
         # encode the next move into a one-hot target
         next_move = move_to_one_hot(Move.from_uci(next_move))
 
-        # get the player's turn and castling rights
+        # whose turn is it? what are their castling rights? what is their ELO?
         turn = board.turn
         castling_rights = board.has_castling_rights(turn)
-
-        # get the players ELO score
         if turn == chess.WHITE:
             elo = game.white_elo
         else:
             elo = game.black_elo
+        elo = elo / 2500  # approx. in [0, 1]
+
+        # is there an en-passant square?
+        # - [0, 63] indicating the position that can be moved to with en-passant
+        # - 64 indicating no en-passant rights
+        en_passant = board.ep_square if board.ep_square else 64
+
+        legal_moves = get_legal_move_mask(board)
 
         return {
             "board": flat_repr,
@@ -60,10 +77,35 @@ class ChessDataset(Dataset):
             "turn": turn,
             "castling_rights": castling_rights,
             "elo": elo,
+            "legal_moves": legal_moves,
+            "en_passant": en_passant,
         }
 
-    def get_collate_fn(self):
+    @staticmethod
+    def get_collate_fn():
         def collate_fn(batch):
-            pass
+            """
+            Custom collate fn.
+            TODO: cast to Jax DeviceArray and transfer to GPU ?
+            :param batch:
+            :return:
+            """
+            board = np.stack([item["board"] for item in batch])
+            next_move = np.stack([item["next_move"] for item in batch]).astype(np.int32)
+            turn = np.array([item["turn"] for item in batch]).astype(np.int32)
+            castling_rights = np.array([item["castling_rights"] for item in batch]).astype(np.int32)
+            elo = np.array([item["elo"] for item in batch]).astype(np.float32)
+            legal_moves = np.stack([item["legal_moves"] for item in batch]).astype(np.bool)
+            en_passant = np.array([item["en_passant"] for item in batch]).astype(np.int32)
 
-        raise NotImplementedError("Oops")
+            return {
+                "board_state": board,
+                "next_move": next_move,
+                "turn": turn,
+                "castling_rights": castling_rights,
+                "elo": elo,
+                "legal_moves": legal_moves,
+                "en_passant": en_passant,
+            }
+
+        return collate_fn
