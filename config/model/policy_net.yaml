@@ -1,4 +1,4 @@
-class: build_policy_net
+__constructor__: build_policy_net
 vocab: 64
 embedding_dim: 512
 nb_layers: 6

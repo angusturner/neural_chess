@@ -60,7 +60,7 @@ class SimpleGame:
         :return:
         """
         assert move_index < len(self), "Move index must be in [0, nb_moves)"
-        board = uci_list_to_board(self.moves[:move_index])
+        board = uci_list_to_board(self.moves[: move_index + 1])
         return board
 
     def serialize(self) -> dict:
@@ -68,4 +68,9 @@ class SimpleGame:
 
     @staticmethod
     def from_serialized(serialized: dict) -> "SimpleGame":
-        return SimpleGame(**serialized)
+        return SimpleGame(
+            uci_list=serialized["moves"],
+            result=serialized["result"],
+            white_elo=serialized["white_elo"],
+            black_elo=serialized["black_elo"],
+        )

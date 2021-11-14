@@ -23,10 +23,7 @@ def train(cfg: DictConfig) -> None:
     )
 
     # setup data loaders
-    dataset_class = cfg["dataset"].pop("class")
-    train_loader, test_loader = setup_loaders(
-        dataset_class=dataset_class, data_opts=cfg["dataset"], loader_opts=cfg["loader"], module=MODULE_NAME
-    )
+    train_loader, test_loader = setup_loaders(data_opts=cfg["dataset"], loader_opts=cfg["loader"], module=MODULE_NAME)
 
     # train
     worker.run(train_loader, test_loader, cfg["nb_epoch"])

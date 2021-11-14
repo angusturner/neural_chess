@@ -1,4 +1,4 @@
-class: SupervisedWorker
+__constructor__: SupervisedWorker
 log_interval: 50
 epoch_save_freq: 10
 optim_class: Adam

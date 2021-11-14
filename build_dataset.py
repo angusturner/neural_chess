@@ -2,7 +2,7 @@ from pprint import pprint
 
 import pyarrow as pa
 from tqdm import tqdm
-from typing import Optional, List, Callable, Union
+from typing import List
 
 import chess
 import chess.pgn
@@ -71,7 +71,11 @@ def read_worker(file_list: List[str], queue: mp.Queue) -> None:
                     continue
 
                 # serialise the game and put it on the input queue
-                game_dict = SimpleGame.from_game(game).serialize()
+                try:
+                    game_dict = SimpleGame.from_game(game).serialize()
+                except ValueError as e:
+                    print(f"Error converting game into `SimpleGame` object.")
+                    print(e)
                 queue.put(game_dict)
                 valid_counter.update(1)
     # kill downstream consumers

@@ -1,4 +1,4 @@
-class: ChessDataset
+__constructor__: ChessDataset
 both:
   data_dir: /Users/angusturner/code/python/neural_chess/data/
 # note: any settings that are dependent on train vs test?

@@ -12,11 +12,18 @@ def build_policy_net(model_config: Optional[dict] = None) -> Callable[..., jnp.n
     vocab = model_config["vocab"]
     embedding_dim = model_config["embedding_dim"]
 
-    def forward(board_state: jnp.ndarray, turn: jnp.ndarray, elo: jnp.ndarray, is_training: bool = True) -> jnp.ndarray:
+    def forward(
+        board_state: jnp.ndarray,
+        turn: jnp.ndarray,
+        castling_rights: jnp.ndarray,
+        elo: jnp.ndarray,
+        is_training: bool = True,
+    ) -> jnp.ndarray:
         """
         Forward pass of the policy network.
         :param board_state: state of the board (batch, 64) (int32 ?)
         :param turn: who's turn is it? (batch)
+        :param castling_rights: is the current player allowed to castle? (batch)
         :param elo: normalised elo rating of the player whose turn it is (batch) (in approx [0, 1])
         :param is_training: whether or not the network is in training mode
         :return:
@@ -26,20 +33,26 @@ def build_policy_net(model_config: Optional[dict] = None) -> Callable[..., jnp.n
         turn = turn.reshape((batch, -1))
         elo = elo.reshape((batch, 1, 1))
 
-        # embed the board state, board positions, and turn
+        # embed the board state, board positions, turn and castling rights
         embed_init = hk.initializers.RandomNormal(stddev=0.1)
-        board_state_embedding = hk.Embed(vocab, embedding_dim, w_init=embed_init)(board_state)
+        board_state_embedding = hk.Embed(vocab, embedding_dim, w_init=embed_init)(board_state)  # (B, 64, E)
         board_positions = jnp.arange(64).reshape((1, 64))
-        board_positions_embedding = hk.Embed(64, embedding_dim, w_init=embed_init)(board_positions)
-        turn_embedding = hk.Embed(2, embedding_dim, w_init=embed_init)(turn)
+        board_positions_embedding = hk.Embed(64, embedding_dim, w_init=embed_init)(board_positions)  # (B, 64, E)
+        turn_embedding = hk.Embed(2, embedding_dim, w_init=embed_init)(turn)  # (B, 1, E)
+        castling_rights_embedding = hk.Embed(2, embedding_dim, w_init=embed_init)(castling_rights)  # (B, 1, E)
 
         # project the ELO rating to the embedding dimensions
         w_init = hk.initializers.VarianceScaling(scale=0.1)  # ? not sure exactly how to set this
-        elo_embedding = hk.Linear(embedding_dim, w_init=w_init)(elo)
+        elo_embedding = hk.Linear(embedding_dim, w_init=w_init)(elo)  # (B, 1, E)
 
         # sum all embeddings into a single hidden state
-        # (batch, 64, embedding_dim), (batch, 64, embedding_dim), (batch, 1, embedding_dim), (batch, 1, embedding_dim)
-        h = board_state_embedding + board_positions_embedding + turn_embedding + elo_embedding
+        h = (
+            board_state_embedding
+            + board_positions_embedding
+            + turn_embedding
+            + elo_embedding
+            + castling_rights_embedding
+        )
 
         return SetTransformer(**model_config)(h, is_training)
 
