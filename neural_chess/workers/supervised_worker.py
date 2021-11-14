@@ -1,5 +1,4 @@
-from functools import partial
-
+import numpy as np
 from pprint import pprint
 
 import jax
@@ -28,7 +27,8 @@ class SupervisedWorker(AbstractWorker):
         super().__init__(*args, **kwargs)
 
         # transform the model into a pure jax function
-        self.forward = model
+        self.forward = hk.transform(model)
+        self.rng = jax.random.PRNGKey(42)
         self.params = None
 
     def _initialise_parameters(self, loader):
@@ -40,27 +40,27 @@ class SupervisedWorker(AbstractWorker):
 
     def train(self, loader):
         # initialise the network
-        # self._initialise_parameters(loader)
-
-        rng = jax.random.PRNGKey(42)
-        forward_t: Transformed = hk.transform(self.forward)
-        batch = next(loader.__iter__())
-        params = forward_t.init(rng, is_training=True, **batch)
+        self._initialise_parameters(loader)
 
         @jax.jit
-        def compute_loss(params, rng, batch, is_training: bool = True):
-            output = forward_t.apply(params, rng, is_training=is_training, **batch)
+        def compute_loss(params, rng, batch, is_training=True):
+            output = self.forward.apply(params, rng, is_training=is_training, **batch)
             target = batch["next_move"]
             mask = batch["legal_moves"]
             loss = cross_entropy(output, target, mask)
             loss = jnp.mean(loss, axis=0)
             return loss, output
 
+        def check_grad(x: jnp.ndarray):
+            if jnp.isnan(x).any() or jnp.isinf(x).any():
+                raise ValueError("NaN or Inf detected")
+
         for i, batch in enumerate(loader):
             # forward pass
-            (loss, output), grads = jax.value_and_grad(compute_loss, has_aux=True)(params, rng, batch)
+            (loss, output), grads = jax.value_and_grad(compute_loss, has_aux=True)(self.params, self.rng, batch)
 
             print("Gradients:")
+            jax.tree_multimap(check_grad, grads)
             grad_shapes = jax.tree_multimap(lambda x: x.shape, grads)
             pprint(grad_shapes)
 
