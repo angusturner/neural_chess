@@ -111,3 +111,6 @@ ENV/
 
 # vscode
 .vscode/
+
+# arrow files
+*.arrow

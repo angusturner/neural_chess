@@ -21,6 +21,9 @@ chess~=1.7.0
 # linting
 black
 
+# database
+pyarrow~=6.0.0
+
 # plotting
 seaborn~=0.11.2
 matplotlib~=3.4.3

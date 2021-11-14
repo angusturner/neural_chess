@@ -1,4 +1,8 @@
-from typing import Optional, List
+from pprint import pprint
+
+import pyarrow as pa
+from tqdm import tqdm
+from typing import Optional, List, Callable, Union
 
 import chess
 import chess.pgn
@@ -6,11 +10,18 @@ from chess.pgn import Game
 import glob
 import multiprocessing as mp
 
-import logging
 import os
 
+from neural_chess.data_utils.simple_game import SimpleGame
+
 DATA_DIR = "data/"
+OUT_FILE = "lichess_300.arrow"
 VALID_TIME_CONTROLS = {"300+0"}
+
+
+class KillSignal:
+    # used to signal the worker processes to stop
+    pass
 
 
 # overwrite the default error handling behaviour (i.e don't silently ignore errors)
@@ -19,59 +30,90 @@ class CustomGameBuilder(chess.pgn.GameBuilder):
         raise IOError("Error parsing game.")
 
 
-def process_pgn_file(pgn_file, break_early: Optional[int] = None) -> List[Game]:
-    """
-    Read a PGN file, and output a list of `chess.pgn.Game` objects.
-    Anything that can be parsed (without errors) is considered valid at this stage.
-    :param pgn_file:
-    :param break_early:
-    :return:
-    """
-    logging.info("Processing file: {}".format(pgn_file))
-    games = []
-    with open(pgn_file, "r") as f:
-        i = 0
-        while True:
-            if break_early is not None and i == break_early:
-                logging.info(f"Breaking early after {i} games.")
-                break
-            try:
-                game = chess.pgn.read_game(f, Visitor=CustomGameBuilder)
-            except IOError as _e:
-                logging.error(f"Error parsing game in {pgn_file}. Skipping.")
-
-            if game is None:
-                logging.info(f"Reached end of file {pgn_file}")
-                break
-            games.append(game)
-            i += 1
-
-    return games
-
-
 def is_game_valid(game: Game) -> bool:
     """
-    Determine whether a game is valid!
+    Determine whether a game is valid.
     :param game:
     :return:
     """
     return game.headers["TimeControl"] in VALID_TIME_CONTROLS
 
 
-if __name__ == "__main__":
-    # configure logging
-    logging.basicConfig(filename="app.log", filemode="w", format="%(name)s - %(levelname)s - %(message)s")
+def read_worker(file_list: List[str], queue: mp.Queue) -> None:
+    """
+    Read a list of PGN files, and put the resulting `Game` objects into the input queue.
+    :param file_list:
+    :param queue:
+    :return:
+    """
+    parsed_counter = tqdm(desc="Total games parsed", position=0)
+    valid_counter = tqdm(desc="Valid games", position=1)
+    for pgn_file in file_list:
+        with open(pgn_file, "r") as f:
+            while True:
+                # attempt to read the next game from the file
+                try:
+                    game = chess.pgn.read_game(f, Visitor=CustomGameBuilder)
+                except IOError as _e:
+                    print(f"Error parsing game in {pgn_file}. Skipping.")
+                except Exception as e:
+                    print(f"Something else went wrong? {e}")
 
+                # terminate at file end
+                if game is None:
+                    print(f"Reached end of file {pgn_file}.")
+                    break
+
+                parsed_counter.update(1)
+
+                # skip invalid games
+                if not is_game_valid(game):
+                    continue
+
+                # serialise the game and put it on the input queue
+                game_dict = SimpleGame.from_game(game).serialize()
+                queue.put(game_dict)
+                valid_counter.update(1)
+    # kill downstream consumers
+    queue.put(KillSignal)
+    parsed_counter.close()
+    valid_counter.close()
+    print("Finished reading files.")
+
+
+if __name__ == "__main__":
     # grab all pgn files
     pgn_files = glob.glob(os.path.join(DATA_DIR, "*.pgn"))
-    print(pgn_files)
+    print("Loaded PGN files:")
+    pprint(pgn_files)
 
-    # create a multi-processing pool, with an input and output queue
-    # - One worker process will read pgn files, and add Games to the input queue
-    # - N workers will pull from the input queue, process the games, and add the processed games to the output queue
-    # - One worker will take items from the output queue and write them to the disk
-    manager = mp.Manager()
-    input_queue = manager.Queue()
-    output_queue = manager.Queue()
+    # create the queue and read process
+    q = mp.Queue()
+    read_process = mp.Process(target=read_worker, args=(pgn_files, q))
+    read_process.start()
 
-    raise NotImplementedError("This is not implemented yet.")
+    # stream to PyArrow Array File
+    nb_kill_signals = 0
+    write_buffer = []
+    write_freq = 1000
+    pa_schema = pa.schema(SimpleGame.pa_fields)
+    game_type = pa.struct(SimpleGame.pa_fields)
+    out_path = os.path.join(DATA_DIR, OUT_FILE)
+    with pa.OSFile(out_path, "wb") as sink, tqdm(desc="Write progress", position=2) as pbar:
+        with pa.ipc.new_file(sink, schema=pa_schema) as writer:
+            while True:
+                item = q.get()
+                if item == KillSignal:
+                    print("Writing completed.")
+                    break
+                else:
+                    write_buffer.append(item)
+                    if len(write_buffer) == write_freq:
+                        array = pa.array(write_buffer, type=game_type)
+                        batch = pa.RecordBatch.from_struct_array(array)
+                        writer.write(batch)
+                        write_buffer = []
+                pbar.update(1)
+    pbar.close()
+    read_process.join()
+    read_process.close()
