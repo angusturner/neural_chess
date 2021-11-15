@@ -123,7 +123,7 @@ class SupervisedWorker(hx.Worker):
         for i, batch in enumerate(tqdm(loader)):
             # forward pass
             eval_fn = jax.jit(jax.value_and_grad(criterion, has_aux=True))
-            loss, _output = eval_fn(self.params, self.opt_state, batch, is_training=False)
+            loss, _output = eval_fn(self.params, self.rng, batch, is_training=False)
 
             # track metrics
             losses.append(loss.item())
