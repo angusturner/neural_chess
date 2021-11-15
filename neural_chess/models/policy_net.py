@@ -1,6 +1,6 @@
 import haiku as hk
 import jax.numpy as jnp
-from typing import Optional, Callable
+from typing import Optional, Callable, Dict, Any
 
 from neural_chess.models.transformer import SetTransformer
 
@@ -20,7 +20,7 @@ def embed(
     return hk.Embed(vocab, emb_dim, name=name, w_init=w_init)(x)
 
 
-def build_policy_net(**model_config) -> Callable[..., jnp.ndarray]:
+def build_policy_net(**model_config: Any) -> Callable[..., jnp.ndarray]:
     """
     Build a policy network.
     :param model_config:

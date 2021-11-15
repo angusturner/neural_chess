@@ -30,13 +30,22 @@ class CustomGameBuilder(chess.pgn.GameBuilder):
         raise IOError("Error parsing game.")
 
 
-def is_game_valid(game: Game) -> bool:
+def has_valid_game_headers(game: Game) -> bool:
     """
-    Determine whether a game is valid.
+    Determine whether a game is valid based on headers.
     :param game:
     :return:
     """
     return game.headers["TimeControl"] in VALID_TIME_CONTROLS
+
+
+def is_valid_game(game: SimpleGame) -> bool:
+    """
+    Determine whether a game is valid, based on the actual move data.
+    :param game:
+    :return:
+    """
+    return 2 <= len(game) <= 100
 
 
 def read_worker(file_list: List[str], queue: mp.Queue) -> None:
@@ -66,13 +75,16 @@ def read_worker(file_list: List[str], queue: mp.Queue) -> None:
 
                 parsed_counter.update(1)
 
-                # skip invalid games
-                if not is_game_valid(game):
+                # skip games with invalid metadata
+                if not has_valid_game_headers(game):
                     continue
 
                 # serialise the game and put it on the input queue
                 try:
-                    game_dict = SimpleGame.from_game(game).serialize()
+                    simple_game = SimpleGame.from_game(game)
+                    if not is_valid_game(simple_game):
+                        continue
+                    game_dict = simple_game.serialize()
                 except ValueError as e:
                     print(f"Error converting game into `SimpleGame` object.")
                     print(e)
