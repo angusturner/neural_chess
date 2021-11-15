@@ -1,52 +1,52 @@
-import numpy as np
+from torch.utils.data import DataLoader
+from typing import Optional, Callable
+
 from pprint import pprint
 
 import jax
 import jax.numpy as jnp
 import haiku as hk
-from haiku import Transformed
+import hijax as hx
+from neural_chess.datasets import ChessDataset
 
-from hijax import AbstractWorker
-
-
-@jax.jit
-def cross_entropy(logits: jnp.ndarray, labels: jnp.ndarray, mask: jnp.ndarray) -> jnp.ndarray:
-    """
-    Computes the cross entropy loss between logits and labels.
-    :param logits: unnormalized log-probabilities
-    :param labels: ground-truth labels
-    :param mask:
-    """
-    logits = jnp.where(mask, logits, jnp.full_like(logits, -1e9))
-    logits = jax.nn.log_softmax(logits, axis=-1)
-    return -jnp.sum(labels * logits, axis=-1)
+from neural_chess.utils import cross_entropy
 
 
-class SupervisedWorker(AbstractWorker):
-    def __init__(self, model, checkpoint_id="best", *args, **kwargs):
-        super().__init__(*args, **kwargs)
+class SupervisedWorker(hx.Worker):
+    def __init__(
+        self,
+        model: Callable,
+        loaders: Optional[hx.Loaders] = None,
+        checkpoint_id: str = "best",
+        *args,
+        **kwargs,
+    ):
+        super().__init__(loaders=loaders, *args, **kwargs)
 
         # transform the model into a pure jax function
-        self.forward: Transformed = hk.transform(model)
+        self.forward: hk.Transformed = hk.transform(model)
         self.rng = jax.random.PRNGKey(42)
 
-        # TODO: register parameter state for checkpointing
-        self.params = None
+        # initialise the parameters
+        self.params = self._initialise_parameters()
 
-    # TODO: consider initialising the model inside the `setup_worker` method?
-    # i.e) since we need access to the loader...
-    def _initialise_parameters(self, loader):
-        if self.params is not None:
-            return
-        # initialise the model
-        batch = next(loader.__iter__())
-        self.params = self.forward.init(self.rng, is_training=True, **batch)
+        # register the parameters for model checkpointing
+        self.register_state(self.params, "params")
 
-    def train(self, loader):
-        # initialise the network
-        self._initialise_parameters(loader)
+        # load the checkpoint
+        self.load(checkpoint_id=checkpoint_id)
 
-        # NOTE: jax seems to support closures just fine - as long as no args or return values are functions?
+    def _initialise_parameters(self):
+        # pass dummy data to setup the network parameters
+        batch = ChessDataset.get_dummy_batch()
+        return self.forward.init(self.rng, is_training=True, **batch)
+
+    def get_criterion(self) -> Callable:
+        """
+        Return a closure which uses the `forward.apply` function to compute the model predictions,
+        evaluates the loss and computes gradients wrt to the parameters.
+        """
+
         @jax.jit
         def compute_loss(params, rng, batch, is_training=True):
             output = self.forward.apply(params, rng, is_training=is_training, **batch)
@@ -56,13 +56,26 @@ class SupervisedWorker(AbstractWorker):
             loss = jnp.mean(loss, axis=0)
             return loss, output
 
+        return compute_loss
+
+    def train(self, loader: Optional[DataLoader] = None):
+        # grab the train loader
+        if loader is None:
+            assert self.loaders is not None, "No loaders provided."
+            loader = self.loaders.train
+
+        # <DEBUG>
         def check_grad(x: jnp.ndarray):
             if jnp.isnan(x).any() or jnp.isinf(x).any():
                 raise ValueError("NaN or Inf detected")
 
+        # </DEBUG>
+
+        # get the criterion
+        criterion = self.get_criterion()
         for i, batch in enumerate(loader):
             # forward pass
-            (loss, output), grads = jax.value_and_grad(compute_loss, has_aux=True)(self.params, self.rng, batch)
+            (loss, output), grads = jax.value_and_grad(criterion, has_aux=True)(self.params, self.rng, batch)
 
             print("Gradients:")
             jax.tree_multimap(check_grad, grads)
@@ -71,7 +84,12 @@ class SupervisedWorker(AbstractWorker):
 
             print(f"Loss: {loss}")
 
-        raise Exception("we made it here!")
+            raise Exception("we made it here!")
 
-    def evaluate(self, loader):
-        raise NotImplementedError("")
+    def evaluate(self, loader: Optional[DataLoader] = None):
+        # grab the train loader
+        if loader is None:
+            assert self.loaders is not None, "No loaders provided."
+            loader = self.loaders.test
+
+        raise NotImplementedError("Evaluation not implemented yet.")

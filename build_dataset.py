@@ -12,7 +12,7 @@ import multiprocessing as mp
 
 import os
 
-from neural_chess.data_utils.simple_game import SimpleGame
+from neural_chess.utils.data import SimpleGame
 
 DATA_DIR = "data/"
 OUT_FILE = "lichess_300.arrow"

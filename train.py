@@ -1,6 +1,6 @@
 import hydra
 from omegaconf import DictConfig
-from hijax.setup import setup_worker, setup_loaders
+from hijax.setup import setup_worker
 
 from neural_chess import MODULE_NAME
 
@@ -21,13 +21,12 @@ def train(cfg: DictConfig) -> None:
         overwrite=overwrite,
         reset_metrics=reset_metrics,
         module=MODULE_NAME,
+        with_wandb=True,
+        with_loaders=True,
     )
 
-    # setup data loaders
-    train_loader, test_loader = setup_loaders(data_opts=cfg["dataset"], loader_opts=cfg["loader"], module=MODULE_NAME)
-
     # train
-    worker.run(train_loader, test_loader, cfg["nb_epoch"])
+    worker.run(nb_epoch=cfg["nb_epoch"])
 
 
 if __name__ == "__main__":

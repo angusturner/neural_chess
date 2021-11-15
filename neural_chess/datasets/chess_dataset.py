@@ -4,9 +4,7 @@ import pyarrow as pa
 from chess import Board, Move
 from torch.utils.data import Dataset
 
-from neural_chess.data_utils import board_to_flat_repr, get_legal_move_mask
-from neural_chess.data_utils.one_hot import move_to_one_hot
-from neural_chess.data_utils.simple_game import SimpleGame
+from neural_chess.utils.data import board_to_flat_repr, get_legal_move_mask, move_to_one_hot, SimpleGame
 
 
 class ChessDataset(Dataset):
@@ -109,3 +107,22 @@ class ChessDataset(Dataset):
             }
 
         return collate_fn
+
+    @staticmethod
+    def get_dummy_batch(batch_size=8):
+        """
+        Generate a dummy batch of network inputs, for the purpose of initialising the parameter dict.
+        Note: this is not a legal board position!
+        """
+        board = np.random.randint(0, 13, (batch_size, 64)).astype(np.int32)
+        turn = np.random.binomial(p=0.5, n=1, size=(batch_size,)).astype(np.int32)
+        castling_rights = np.random.binomial(p=0.5, n=1, size=(batch_size,)).astype(np.int32)
+        en_passant = np.random.randint(0, 65, (batch_size,)).astype(np.int32)
+        elo = np.random.random((batch_size,)).astype(np.float32)
+        return {
+            "board_state": board,
+            "turn": turn,
+            "castling_rights": castling_rights,
+            "elo": elo,
+            "en_passant": en_passant,
+        }
