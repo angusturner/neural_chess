@@ -1,7 +1,7 @@
+import numpy as np
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 from typing import Optional, Callable, Dict
-
-from pprint import pprint
 
 import jax
 import jax.numpy as jnp
@@ -14,6 +14,11 @@ import optax
 from neural_chess.datasets import ChessDataset
 
 from neural_chess.utils import cross_entropy
+
+
+def check_grad(x: jnp.ndarray):
+    if jnp.isnan(x).any() or jnp.isinf(x).any():
+        raise ValueError("NaN or Inf detected")
 
 
 class SupervisedWorker(hx.Worker):
@@ -83,36 +88,50 @@ class SupervisedWorker(hx.Worker):
             assert self.loaders is not None, "No loaders provided."
             loader = self.loaders.train
 
-        # <DEBUG>
-        # def check_grad(x: jnp.ndarray):
-        #     if jnp.isnan(x).any() or jnp.isinf(x).any():
-        #         raise ValueError("NaN or Inf detected")
-        # </DEBUG>
-
         # get the criterion
         criterion = self.get_criterion()
-        for i, batch in enumerate(loader):
+
+        # define optimisation step
+        @jax.jit
+        def step(params, opt_state, batch):
+            (loss, output), grads = jax.value_and_grad(criterion, has_aux=True)(params, self.rng, batch)
+            updates, opt_state = self.optim.update(grads, opt_state, params)
+            params = optax.apply_updates(params, updates)
+            return loss, output, params, opt_state
+
+        for i, batch in enumerate(tqdm(loader)):
             # forward pass
-            (loss, output), grads = jax.value_and_grad(criterion, has_aux=True)(self.params, self.rng, batch)
+            loss, output, self.params, self.opt_state = step(self.params, self.opt_state, batch)
 
-            # <DEBUG> - check gradients
-            # jax.tree_multimap(check_grad, grads)
-            # grad_shapes = jax.tree_multimap(lambda x: x.shape, grads)
-            # pprint(grad_shapes)
-            # </DEBUG>
+            # plot metrics
+            self._plot_loss(
+                {
+                    "loss": loss,
+                },
+                train=True,
+            )
 
-            # optimiser step
-            updates, self.opt_state = self.optim.update(grads, self.opt_state)
-            self.params = optax.apply_updates(self.params, updates)
-
-            print(f"Loss: {loss}")
-
-        raise Exception("we made it here!")
-
-    def evaluate(self, loader: Optional[DataLoader] = None):
+    def evaluate(self, loader: Optional[DataLoader] = None) -> (float, Dict):
         # grab the test loader
         if loader is None:
             assert self.loaders is not None, "No loaders provided."
             loader = self.loaders.test
 
-        raise NotImplementedError("Evaluation not implemented yet.")
+        criterion = self.get_criterion()
+        losses = []
+        summary_stats = {}
+        for i, batch in enumerate(tqdm(loader)):
+            # forward pass
+            eval_fn = jax.jit(jax.value_and_grad(criterion, has_aux=True))
+            loss, _output = eval_fn(self.params, self.opt_state, batch, is_training=False)
+
+            # track metrics
+            losses.append(loss.item())
+            self._plot_loss(
+                {
+                    "loss": loss,
+                },
+                train=False,
+            )
+
+        return np.mean(losses), summary_stats
