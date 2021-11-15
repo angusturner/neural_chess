@@ -43,8 +43,10 @@ class SupervisedWorker(hx.Worker):
 
     def get_criterion(self) -> Callable:
         """
-        Return a closure which uses the `forward.apply` function to compute the model predictions,
-        evaluates the loss and computes gradients wrt to the parameters.
+        Return a closure which:
+        - uses the `forward.apply` function to compute the model predictions
+        - computes the cross entropy loss
+        - computes the gradients of the loss with respect to the model parameters
         """
 
         @jax.jit
@@ -87,7 +89,7 @@ class SupervisedWorker(hx.Worker):
             raise Exception("we made it here!")
 
     def evaluate(self, loader: Optional[DataLoader] = None):
-        # grab the train loader
+        # grab the test loader
         if loader is None:
             assert self.loaders is not None, "No loaders provided."
             loader = self.loaders.test
