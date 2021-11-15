@@ -1,3 +1,5 @@
+import functools
+
 import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -71,7 +73,7 @@ class SupervisedWorker(hx.Worker):
         - computes the gradients of the loss with respect to the model parameters
         """
 
-        @jax.jit
+        @functools.partial(jax.jit, static_argnums=3)
         def compute_loss(params, rng, batch, is_training=True):
             output = self.forward.apply(params, rng, is_training=is_training, **batch)
             target = batch["next_move"]
@@ -122,7 +124,7 @@ class SupervisedWorker(hx.Worker):
         summary_stats = {}
         for i, batch in enumerate(tqdm(loader)):
             # forward pass
-            eval_fn = jax.jit(jax.value_and_grad(criterion, has_aux=True))
+            eval_fn = jax.jit(jax.value_and_grad(criterion, has_aux=True), static_argnums=3)
             loss, _output = eval_fn(self.params, self.rng, batch, is_training=False)
 
             # track metrics
