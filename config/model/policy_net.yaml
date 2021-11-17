@@ -1,9 +1,9 @@
 __constructor__: build_policy_net
 vocab: 13  # i.e) 12 pieces + empty square
-embedding_dim: 128
-hidden_dim: 128
-nb_layers: 4
+embedding_dim: 256
+hidden_dim: 256
+nb_layers: 6
 nb_heads: 4
-head_dim: 32
+head_dim: 64
 output_dim: 4096
 dropout: 0.1

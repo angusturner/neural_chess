@@ -40,7 +40,6 @@ class SupervisedWorker(hx.Worker):
 
         # transform the model into a pure jax function
         self.forward: hk.Transformed = hk.transform(model)
-        self.rng = jax.random.PRNGKey(42)
 
         # initialise the model parameters
         self.params = self._initialise_parameters()
@@ -53,36 +52,48 @@ class SupervisedWorker(hx.Worker):
         self.optim = optim_fn(**optim_settings)
         self.opt_state = self.optim.init(self.params)
 
-        # register the parameters and optimiser state, for model checkpointing
-        self.register_state(self.params, "params")
-        self.register_state(self.opt_state, "optim_state")
-
         # load the checkpoint
         self.load(checkpoint_id=checkpoint_id)
 
     def _initialise_parameters(self):
         # pass dummy data to setup the network parameters
         batch = ChessDataset.get_dummy_batch()
-        return self.forward.init(self.rng, is_training=True, **batch)
+        return self.forward.init(self.rng_key, is_training=True, **batch)
 
-    def get_criterion(self) -> Callable:
+    @functools.partial(jax.jit, static_argnums=(0, 4))
+    def compute_loss(self, params, rng, batch, is_training: bool = True):
         """
-        Return a closure which:
-        - uses the `forward.apply` function to compute the model predictions
-        - computes the cross entropy loss
-        - computes the gradients of the loss with respect to the model parameters
+        Compute the loss for a batch.
+        :param params:
+        :param rng:
+        :param batch:
+        :param is_training:
+        :return:
         """
+        output = self.forward.apply(params, rng, is_training=is_training, **batch)
+        target = batch["next_move"]
+        mask = batch["legal_moves"]
+        loss = cross_entropy(output, target, mask)
+        loss = jnp.mean(loss, axis=0)
+        return loss, output
 
-        @functools.partial(jax.jit, static_argnums=3)
-        def compute_loss(params, rng, batch, is_training=True):
-            output = self.forward.apply(params, rng, is_training=is_training, **batch)
-            target = batch["next_move"]
-            mask = batch["legal_moves"]
-            loss = cross_entropy(output, target, mask)
-            loss = jnp.mean(loss, axis=0)
-            return loss, output
+    @functools.partial(jax.jit, static_argnums=(0, 4))
+    def compute_grads(self, params, rng, batch, is_training: bool = True):
+        """
+        Compute the gradients for a batch.
+        :param params:
+        :param rng:
+        :param batch:
+        :param is_training:
+        :return:
+        """
+        return jax.value_and_grad(self.compute_loss, has_aux=True)(params, rng, batch, is_training)
 
-        return compute_loss
+    @functools.partial(jax.jit, static_argnums=(0,))
+    def optimiser_step(self, grads, opt_state, params):
+        updates, opt_state = self.optim.update(grads, opt_state, params)
+        params = optax.apply_updates(params, updates)
+        return params, opt_state
 
     def train(self, loader: Optional[DataLoader] = None):
         # grab the train loader
@@ -90,20 +101,13 @@ class SupervisedWorker(hx.Worker):
             assert self.loaders is not None, "No loaders provided."
             loader = self.loaders.train
 
-        # get the criterion
-        criterion = self.get_criterion()
-
-        # define optimisation step
-        @jax.jit
-        def step(params, opt_state, batch):
-            (loss, output), grads = jax.value_and_grad(criterion, has_aux=True)(params, self.rng, batch)
-            updates, opt_state = self.optim.update(grads, opt_state, params)
-            params = optax.apply_updates(params, updates)
-            return loss, output, params, opt_state
-
         for i, batch in enumerate(tqdm(loader)):
-            # forward pass
-            loss, output, self.params, self.opt_state = step(self.params, self.opt_state, batch)
+            # forward pass + gradient computation
+            key = self.next_rng_key()
+            (loss, output), grads = self.compute_grads(self.params, key, batch, is_training=True)
+
+            # update parameters
+            self.params, self.opt_state = self.optimiser_step(grads, self.opt_state, self.params)
 
             # plot metrics
             self._plot_loss(
@@ -119,12 +123,12 @@ class SupervisedWorker(hx.Worker):
             assert self.loaders is not None, "No loaders provided."
             loader = self.loaders.test
 
-        criterion = self.get_criterion()
         losses = []
         summary_stats = {}
         for i, batch in enumerate(tqdm(loader)):
             # forward pass
-            loss, _output = criterion(self.params, self.rng, batch, is_training=False)
+            key = self.next_rng_key()  # note: not really needed since dropout is disabled?
+            loss, _output = self.compute_loss(self.params, key, batch, is_training=False)
 
             # track metrics
             losses.append(loss.item())
@@ -136,3 +140,13 @@ class SupervisedWorker(hx.Worker):
             )
 
         return np.mean(losses), summary_stats
+
+    def get_state_dict(self) -> Dict:
+        return {
+            "params": self.params,
+            "optim_state": self.opt_state,
+        }
+
+    def load_state_dict(self, state_dict: Dict):
+        self.params = state_dict["params"]
+        self.opt_state = state_dict["optim_state"]
