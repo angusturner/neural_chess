@@ -57,7 +57,7 @@ class SupervisedWorker(hx.Worker):
 
     def _initialise_parameters(self):
         # pass dummy data to setup the network parameters
-        batch = ChessDataset.get_dummy_batch()
+        batch = ChessDataset.get_dummy_batch(batch_size=8)
         return self.forward.init(self.rng_key, is_training=True, **batch)
 
     @functools.partial(jax.jit, static_argnums=(0, 4))
