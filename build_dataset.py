@@ -101,6 +101,8 @@ def process_worker(input_q: mp.Queue, output_q: mp.Queue) -> None:
             print("Killing process worker.")
             output_q.put(KillSignal)
             break
+
+        # parse the game
         game: Game = chess.pgn.read_game(io.StringIO(game_string), Visitor=CustomGameBuilder)
 
         # skip games with invalid headers (e.g. missing ELO, invalid time control)
@@ -108,8 +110,12 @@ def process_worker(input_q: mp.Queue, output_q: mp.Queue) -> None:
             continue
 
         # skip games with invalid move data (e.g. too few moves, too many moves)
-        simple_game = SimpleGame.from_game(game)
-        if not is_valid_game(simple_game):
+        try:
+            simple_game = SimpleGame.from_game(game)
+            if not is_valid_game(simple_game):
+                continue
+        except Exception as e:
+            print("Error parsing game: {}".format(e))
             continue
 
         # serialise
