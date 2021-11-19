@@ -63,11 +63,14 @@ def read_worker(file_list: List[str], input_q: mp.Queue, nb_consumers: int = 1) 
     """
     read_counter = tqdm(desc="Total games read.", position=0)
     for pgn_file in file_list:
+        print("Reading file: {}".format(pgn_file))
         with open(pgn_file, "r") as f:
             n = 0
             game_string = ""
             while True:
                 line = f.readline()
+                if not line:
+                    break
                 if line.strip() == "":
                     n += 1
                     if n > 0 and (n % 2) == 0:
