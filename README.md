@@ -1,9 +1,14 @@
 # Neural Chess
 
-A neural chess bot, using [Jax](https://github.com/google/jax) and [Haiku](https://github.com/deepmind/dm-haiku). 
+A neural chess bot, written in Jax. Uses a simple transformer-based classifier to predict the next move, conditional
+on the player's ELO rating.
+
+Still a WIP. You can play against the current version here:
+
+    
 
 TODO:
 - [x] Design the data representation and model
 - [x] Basic data pipeline and loader
-- [ ] Supervised policy network, trained on Lichess data (WIP)
+- [x] Supervised policy network, trained on Lichess data (WIP)
 - [ ] Self-play / reinforcement learning approaches

@@ -1,5 +1,3 @@
-import functools
-
 import numpy as np
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -14,7 +12,6 @@ import optax
 
 
 from neural_chess.datasets import ChessDataset
-
 from neural_chess.utils import cross_entropy
 
 
@@ -60,7 +57,7 @@ class SupervisedWorker(hx.Worker):
         batch = ChessDataset.get_dummy_batch(batch_size=8)
         return self.forward.init(self.rng_key, is_training=True, **batch)
 
-    @functools.partial(jax.jit, static_argnums=(0, 4))
+    @hx.jit_method(static_argnums=3)
     def compute_loss(self, params, rng, batch, is_training: bool = True):
         """
         Compute the loss for a batch.
@@ -77,7 +74,7 @@ class SupervisedWorker(hx.Worker):
         loss = jnp.mean(loss, axis=0)
         return loss, output
 
-    @functools.partial(jax.jit, static_argnums=(0, 4))
+    @hx.jit_method(static_argnums=3)
     def compute_grads(self, params, rng, batch, is_training: bool = True):
         """
         Compute the gradients for a batch.
@@ -89,7 +86,7 @@ class SupervisedWorker(hx.Worker):
         """
         return jax.value_and_grad(self.compute_loss, has_aux=True)(params, rng, batch, is_training)
 
-    @functools.partial(jax.jit, static_argnums=(0,))
+    @hx.jit_method()
     def optimiser_step(self, grads, opt_state, params):
         updates, opt_state = self.optim.update(grads, opt_state, params)
         params = optax.apply_updates(params, updates)
