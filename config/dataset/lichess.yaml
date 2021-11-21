@@ -1,7 +1,7 @@
 __constructor__: ChessDataset
 both:
 #  path_to_db: /Users/angusturner/code/python/neural_chess/data/lichess_300.arrow
-  path_to_db: /home/angusturner/code/python/neural_chess/data/lichess_300.arrow
+  path_to_db: /home/angusturner/code/python/neural_chess/data/lichess_600_large.arrow
 # note: any settings that are dependent on train vs test?
 train:
   is_training: true

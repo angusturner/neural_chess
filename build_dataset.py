@@ -97,7 +97,7 @@ def process_worker(input_q: mp.Queue, output_q: mp.Queue) -> None:
     """
     while True:
         game_string = input_q.get()
-        if isinstance(game_string, KillSignal):
+        if game_string == KillSignal:
             print("Killing process worker.")
             output_q.put(KillSignal)
             break

@@ -2,7 +2,7 @@ __constructor__: SupervisedWorker
 log_interval: 50
 epoch_save_freq: 10
 # any valid optimiser in `optax` is valid here
-optim_name: adam
+optim_name: radam
 optim_settings:
   learning_rate: 1e-4
   b1: 0.9
