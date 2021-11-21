@@ -4,6 +4,7 @@ A neural chess bot, written in Jax. Uses a simple transformer-based classifier t
 on the player's ELO rating.
 
 Still a WIP. You can play against the current version here:
+https://lichess.org/@/transformer_chess
 
     
 
