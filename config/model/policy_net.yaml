@@ -7,3 +7,4 @@ nb_heads: 8
 head_dim: 64
 output_dim: 4096
 dropout: 0.1
+separate_rank_and_file: true

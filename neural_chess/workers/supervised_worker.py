@@ -20,6 +20,19 @@ def check_grad(x: jnp.ndarray):
         raise ValueError("NaN or Inf detected")
 
 
+def get_accuracy(output, next_move):
+    """
+    Compute the accuracy of the model.
+    :param output:
+    :param next_move:
+    :return:
+    """
+    # convert one-hot encoded next_move to index, and then compute accuracy
+    next_move_idx = jnp.argmax(next_move, axis=1)
+    correct = jnp.sum(jnp.equal(jnp.argmax(output, axis=1), next_move_idx))
+    return correct / len(next_move_idx)
+
+
 class SupervisedWorker(hx.Worker):
     def __init__(
         self,
@@ -28,10 +41,12 @@ class SupervisedWorker(hx.Worker):
         optim_name: str = "adam",
         optim_settings: Optional[Dict] = None,
         checkpoint_id: str = "best",
+        mask_loss: bool = True,
         *args,
         **kwargs,
     ):
         super().__init__(loaders=loaders, *args, **kwargs)
+        self.mask_loss = mask_loss
         if optim_settings is None:
             optim_settings = {}
 
@@ -69,7 +84,10 @@ class SupervisedWorker(hx.Worker):
         """
         output = self.forward.apply(params, rng, is_training=is_training, **batch)
         target = batch["next_move"]
-        mask = batch["legal_moves"]
+        if self.mask_loss:
+            mask = batch["legal_moves"]
+        else:
+            mask = jnp.ones_like(target)
         loss = cross_entropy(output, target, mask)
         loss = jnp.mean(loss, axis=0)
         return loss, output
@@ -103,14 +121,15 @@ class SupervisedWorker(hx.Worker):
             key = self.next_rng_key()
             (loss, output), grads = self.compute_grads(self.params, key, batch, is_training=True)
 
+            # get accuracy
+            accuracy = get_accuracy(output, batch["next_move"])
+
             # update parameters
             self.params, self.opt_state = self.optimiser_step(grads, self.opt_state, self.params)
 
             # plot metrics
             self._plot_loss(
-                {
-                    "loss": loss,
-                },
+                {"loss": loss, "accuracy": accuracy},
                 train=True,
             )
 
@@ -125,14 +144,15 @@ class SupervisedWorker(hx.Worker):
         for i, batch in enumerate(tqdm(loader)):
             # forward pass
             key = self.next_rng_key()  # note: not really needed since dropout is disabled?
-            loss, _output = self.compute_loss(self.params, key, batch, is_training=False)
+            loss, output = self.compute_loss(self.params, key, batch, is_training=False)
+
+            # get accuracy
+            accuracy = get_accuracy(output, batch["next_move"])
 
             # track metrics
             losses.append(loss.item())
             self._plot_loss(
-                {
-                    "loss": loss,
-                },
+                {"loss": loss, "accuracy": accuracy},
                 train=False,
             )
 

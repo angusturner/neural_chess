@@ -1,6 +1,7 @@
 both:
   shuffle: true
-  batch_size: 32
+  batch_size: 256
+  num_workers: 4
 train:
   drop_last: true
 test:

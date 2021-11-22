@@ -38,7 +38,7 @@ class SetTransformer(hk.Module):
     def __init__(self, nb_layers, nb_heads, hidden_dim, head_dim, output_dim, dropout=0.1, **_kwargs):
         """
         Simple feed-forward transformer stack, with no masking or causality.
-        Global pooling to a single output.
+        Classification layer on the first output with MLP.
         :param nb_layers:
         :param nb_heads:
         :param hidden_dim:
@@ -90,7 +90,7 @@ class SetTransformer(hk.Module):
         h = layer_norm()(h)
 
         # average over length dimension
-        h = jnp.mean(h, axis=-2)
+        h = h[:, 0, :]
 
         # project to final output
         return MLP(hidden_dim=self.hidden_dim * 2, output_dim=self.output_dim, init_scale=init_scale)(h)
