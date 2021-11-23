@@ -8,4 +8,4 @@ head_dim: 64
 output_dim: 4096
 dropout: 0.1
 separate_rank_and_file: false
-add_result: true
+add_result: false

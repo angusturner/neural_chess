@@ -5,4 +5,4 @@ mask_loss: false
 # any valid optimiser in `optax` is valid here
 optim_name: radam
 optim_settings:
-  learning_rate: 1e-4
+  learning_rate: 1e-5

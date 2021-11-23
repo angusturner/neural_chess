@@ -16,15 +16,16 @@ import os
 from neural_chess.utils.data import SimpleGame
 
 DATA_DIR = "data/"
-OUT_FILE = "lichess_600_v2_small.arrow"
+OUT_FILE = "lichess_600_v2.arrow"
 VALID_TIME_CONTROLS = {"600+0"}
 MIN_HALF_MOVES = 10
 MAX_HALF_MOVES = 300
-MIN_ELO = 1200
-MAX_ELO = 2200
+MIN_ELO = 1400
+MAX_ELO = 2500
 VALID_TERMINATIONS = {"Normal", "Time forfeit"}  # remove 'Abandoned' games, since the result is meaningless
 CLOCK_THRESHOLD = 10  # trim moves made with less than 10 seconds left on the clock
-BREAK_EARLY: Optional[int] = 10000000  # optionally limit the number of games to process
+BREAK_EARLY: Optional[int] = None  # 1000000  # optionally limit the number of games to process
+NB_PROCESSES = 8  # mp.cpu_count() - 1
 
 
 class KillSignal:
@@ -177,7 +178,7 @@ if __name__ == "__main__":
     pprint(pgn_files)
 
     # create the input_q and read process
-    nb_workers = mp.cpu_count() - 1
+    nb_workers = NB_PROCESSES
     manager = mp.Manager()
     input_queue = manager.Queue(maxsize=10000)
     output_queue = manager.Queue(maxsize=10000)
