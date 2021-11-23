@@ -62,6 +62,13 @@ class ChessDataset(Dataset):
             elo = game.black_elo
         elo = elo / 2500  # approx. in [0, 1]
 
+        # what's the game result
+        # 1 = black win, 0 = draw, -1 = white win
+        result = game.result
+        if result == 2:
+            result = 0.5
+        result = result * 2 - 1  # in [-1, 1]
+
         # is there an en-passant square?
         # - [0, 63] indicating the position that can be moved to with en-passant
         # - 64 indicating no en-passant rights
@@ -77,6 +84,7 @@ class ChessDataset(Dataset):
             "elo": elo,
             "legal_moves": legal_moves,
             "en_passant": en_passant,
+            "result": result,
         }
 
     @staticmethod
@@ -95,6 +103,7 @@ class ChessDataset(Dataset):
             elo = np.array([item["elo"] for item in batch]).astype(np.float32)
             legal_moves = np.stack([item["legal_moves"] for item in batch]).astype(np.bool)
             en_passant = np.array([item["en_passant"] for item in batch]).astype(np.int32)
+            result = np.array([item["result"] for item in batch]).astype(np.float32)
 
             return {
                 "board_state": board,
@@ -104,6 +113,7 @@ class ChessDataset(Dataset):
                 "elo": elo,
                 "legal_moves": legal_moves,
                 "en_passant": en_passant,
+                "result": result,
             }
 
         return collate_fn
@@ -119,10 +129,12 @@ class ChessDataset(Dataset):
         castling_rights = np.random.binomial(p=0.5, n=1, size=(batch_size,)).astype(np.int32)
         en_passant = np.random.randint(0, 65, (batch_size,)).astype(np.int32)
         elo = np.random.random((batch_size,)).astype(np.float32)
+        result = np.random.random((batch_size,)).astype(np.float32)
         return {
             "board_state": board,
             "turn": turn,
             "castling_rights": castling_rights,
             "elo": elo,
             "en_passant": en_passant,
+            "result": result,
         }

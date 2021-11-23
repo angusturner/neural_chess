@@ -65,6 +65,7 @@ class SupervisedWorker(hx.Worker):
         self.opt_state = self.optim.init(self.params)
 
         # load the checkpoint
+        # self.load(checkpoint_id="latest")
         self.load(checkpoint_id=checkpoint_id)
 
     def _initialise_parameters(self):

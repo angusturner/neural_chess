@@ -16,8 +16,13 @@ import os
 from neural_chess.utils.data import SimpleGame
 
 DATA_DIR = "data/"
-OUT_FILE = "lichess_600_large.arrow"
+OUT_FILE = "lichess_600_large_v2.arrow"
 VALID_TIME_CONTROLS = {"600+0"}
+MIN_HALF_MOVES = 10
+MAX_HALF_MOVES = 300
+MIN_ELO = 1200
+MAX_ELO = 2200
+VALID_TERMINATIONS = {"Normal"}
 
 
 class KillSignal:
@@ -39,9 +44,38 @@ def has_valid_game_headers(game: Game) -> bool:
     """
     if game is None:
         return False
-    if getattr(game, "headers", None) is None:
+    headers = getattr(game, "headers", None)
+    if headers is None:
         return False
-    return game.headers["TimeControl"] in VALID_TIME_CONTROLS
+
+    # check that all required headers are present
+    required_headers = {"WhiteElo", "BlackElo", "TimeControl", "Termination"}
+    for header in required_headers:
+        if header not in headers:
+            return False
+
+    # check the values of each header
+    if headers["TimeControl"] not in VALID_TIME_CONTROLS:
+        return False
+
+    # try to parse elo values to integers
+    try:
+        white_elo = int(headers["WhiteElo"])
+        black_elo = int(headers["BlackElo"])
+    except ValueError:
+        return False
+
+    # check that the elo values are within the valid range
+    if white_elo < MIN_ELO or white_elo > MAX_ELO:
+        return False
+    if black_elo < MIN_ELO or black_elo > MAX_ELO:
+        return False
+
+    # only include normal terminations (no abandonment, no time forfeit)
+    if headers["Termination"] not in VALID_TERMINATIONS:
+        return False
+
+    return True
 
 
 def is_valid_game(game: SimpleGame) -> bool:
@@ -50,7 +84,7 @@ def is_valid_game(game: SimpleGame) -> bool:
     :param game:
     :return:
     """
-    return 2 <= len(game) <= 100
+    return MIN_HALF_MOVES <= len(game) <= MAX_HALF_MOVES
 
 
 def read_worker(file_list: List[str], input_q: mp.Queue, nb_consumers: int = 1) -> None:
