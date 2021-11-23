@@ -2,8 +2,9 @@ import pyarrow as pa
 from chess.pgn import Game
 from chess import Board
 
-from typing import List
+from typing import List, Optional
 
+from .trim_game import trim_game
 from .uci import board_to_uci_list, uci_list_to_board
 
 
@@ -42,11 +43,16 @@ class SimpleGame:
         return len(self.moves)
 
     @staticmethod
-    def from_game(game: Game) -> "SimpleGame":
+    def from_game(game: Game, clock_threshold: Optional[int] = None) -> "SimpleGame":
         """
         Converts a chess.pgn.Game object to a SimpleGame object.
+        :param game: The chess.pgn.Game object to convert
+        :param clock_threshold: If set, moves made under time pressure will be truncated
         """
-        board = game.end().board()
+        if clock_threshold is None:
+            board = game.end().board()
+        else:
+            board = trim_game(game, clock_threshold)
         moves = board_to_uci_list(board)
         result = SimpleGame.result_map[game.headers["Result"]]
         white_elo = int(game.headers["WhiteElo"])

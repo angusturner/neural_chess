@@ -3,7 +3,7 @@ from pprint import pprint
 import io
 import pyarrow as pa
 from tqdm import tqdm
-from typing import List
+from typing import List, Optional
 
 import chess
 import chess.pgn
@@ -16,13 +16,15 @@ import os
 from neural_chess.utils.data import SimpleGame
 
 DATA_DIR = "data/"
-OUT_FILE = "lichess_600_large_v2.arrow"
+OUT_FILE = "lichess_600_v2_small.arrow"
 VALID_TIME_CONTROLS = {"600+0"}
 MIN_HALF_MOVES = 10
 MAX_HALF_MOVES = 300
 MIN_ELO = 1200
 MAX_ELO = 2200
-VALID_TERMINATIONS = {"Normal"}
+VALID_TERMINATIONS = {"Normal", "Time forfeit"}  # remove 'Abandoned' games, since the result is meaningless
+CLOCK_THRESHOLD = 10  # trim moves made with less than 10 seconds left on the clock
+BREAK_EARLY: Optional[int] = 10000000  # optionally limit the number of games to process
 
 
 class KillSignal:
@@ -96,21 +98,32 @@ def read_worker(file_list: List[str], input_q: mp.Queue, nb_consumers: int = 1) 
     :return:
     """
     read_counter = tqdm(desc="Total games read.", position=0)
+    games_read = 0
     for pgn_file in file_list:
         print("Reading file: {}".format(pgn_file))
         with open(pgn_file, "r") as f:
             n = 0
             game_string = ""
             while True:
+                # limit number of lines
+                if BREAK_EARLY is not None and games_read >= BREAK_EARLY:
+                    print(f"Terminating after {games_read} games.")
+                    break
+
+                # grab the next line, until EOF
                 line = f.readline()
                 if not line:
                     break
+                # file structure is <headers>\n<moves>\n<headers>\n<moves>\n...
+                # so we accumulate lines into a queue until an even newline is encountered, and
+                # then the resulting game is put into the input queue for parsing (and so on)
                 if line.strip() == "":
                     n += 1
                     if n > 0 and (n % 2) == 0:
                         input_q.put(game_string)
                         game_string = ""
                         read_counter.update(1)
+                        games_read += 1
                     else:
                         game_string += line
                 else:
@@ -145,7 +158,7 @@ def process_worker(input_q: mp.Queue, output_q: mp.Queue) -> None:
 
         # skip games with invalid move data (e.g. too few moves, too many moves)
         try:
-            simple_game = SimpleGame.from_game(game)
+            simple_game = SimpleGame.from_game(game, clock_threshold=CLOCK_THRESHOLD)
             if not is_valid_game(simple_game):
                 continue
         except Exception as e:
@@ -159,7 +172,7 @@ def process_worker(input_q: mp.Queue, output_q: mp.Queue) -> None:
 
 if __name__ == "__main__":
     # grab all pgn files
-    pgn_files = glob.glob(os.path.join(DATA_DIR, "*.pgn"))
+    pgn_files = glob.glob(os.path.join(DATA_DIR, "*2021*.pgn"))
     print("Loaded PGN files:")
     pprint(pgn_files)
 
