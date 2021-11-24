@@ -1,32 +1,9 @@
 from typing import Optional
 
-import jax
 import jax.numpy as jnp
 import haiku as hk
 
-
-class MLP(hk.Module):
-    def __init__(self, hidden_dim, output_dim, init_scale):
-        """
-        Simple 2-layer MLP with GELU activation.
-        :param hidden_dim:
-        :param output_dim:
-        :param init_scale:
-        """
-        super().__init__()
-        self.hidden_size = hidden_dim
-        self.output_size = output_dim
-        self.init_scale = init_scale
-
-    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        """
-        :param x: (..., input_size)
-        :return: (..., output_dim)
-        """
-        w_init = hk.initializers.VarianceScaling(self.init_scale)
-        x = hk.Linear(self.hidden_size, w_init=w_init)(x)
-        x = jax.nn.gelu(x)
-        return hk.Linear(self.output_size, w_init=w_init)(x)
+from neural_chess.models.mlp import MLP
 
 
 # helper to create layer-norm on final dimension
@@ -35,7 +12,9 @@ def layer_norm(name: Optional[str] = None) -> hk.LayerNorm:
 
 
 class SetTransformer(hk.Module):
-    def __init__(self, nb_layers, nb_heads, hidden_dim, head_dim, output_dim, dropout=0.1, **_kwargs):
+    def __init__(
+        self, nb_layers, nb_heads, hidden_dim, head_dim, output_dim, dropout=0.1, with_pooling=True, **_kwargs
+    ):
         """
         Simple feed-forward transformer stack, with no masking or causality.
         Classification layer on the first output with MLP.
@@ -45,6 +24,7 @@ class SetTransformer(hk.Module):
         :param head_dim:
         :param output_dim:
         :param dropout:
+        :param with_pooling:
         """
         super().__init__()
         self.nb_layers = nb_layers
@@ -53,6 +33,7 @@ class SetTransformer(hk.Module):
         self.head_dim = head_dim
         self.output_dim = output_dim
         self.dropout = dropout
+        self.with_pooling = with_pooling
 
     def _init_modules_for_layer(self, init_scale):
         """
@@ -87,10 +68,16 @@ class SetTransformer(hk.Module):
             h_dense = hk.dropout(hk.next_rng_key(), dropout, h_dense)
             h = h + h_dense
 
-        h = layer_norm()(h)
+        ##
+        # [cls] token pooling method
+        ln = layer_norm()
+        if self.with_pooling:
+            h = ln(h)
+            h = h[:, 0, :]
+            return MLP(hidden_dim=self.hidden_dim * 2, output_dim=self.output_dim, init_scale=init_scale)(h)
 
-        # average over length dimension
-        h = h[:, 0, :]
-
-        # project to final output
-        return MLP(hidden_dim=self.hidden_dim * 2, output_dim=self.output_dim, init_scale=init_scale)(h)
+        ##
+        # retain structure / shape of board, but then re-shape into predictions
+        h = MLP(hidden_dim=self.hidden_dim * 2, output_dim=64, init_scale=init_scale)(h)
+        h = h[:, 1:, :]  # (batch, 64, 64)
+        return h.reshape((-1, self.output_dim))

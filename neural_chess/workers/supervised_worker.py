@@ -20,6 +20,7 @@ def check_grad(x: jnp.ndarray):
         raise ValueError("NaN or Inf detected")
 
 
+@jax.jit
 def get_accuracy(output, next_move):
     """
     Compute the accuracy of the model.
@@ -66,7 +67,9 @@ class SupervisedWorker(hx.Worker):
 
         # load the checkpoint
         # self.load(checkpoint_id="latest")
+        # opt_state_ = self.opt_state
         self.load(checkpoint_id=checkpoint_id)
+        # self.opt_state = opt_state_
 
     def _initialise_parameters(self):
         # pass dummy data to setup the network parameters
